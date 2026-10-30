@@ -1,0 +1,141 @@
+dataset:
+  storage_folder: DATA
+  dataset_class: esm_surrogate.data.ProteinEmbeddingDataset
+  data_splits_file: DATA_SPLITS/ProteinEmbeddingDataset/ProteinEmbeddingDataset_outer1_inner1.splits
+
+resources:
+  device: cuda
+  max_cpus: 24
+  max_gpus: 1
+  gpus_per_task: 1
+
+reproducibility:
+  seed: 42
+
+data_loading:
+  dataset_getter: mlwiz.data.provider.DataProvider
+  data_loader:
+    class_name: esm_surrogate.data.ESMProteinDataLoader
+    args:
+      max_sequence_length: 1307
+      num_workers: 4
+      pin_memory: true
+
+experiment:
+  result_folder: RESULTS
+  exp_name: esm_distillation_mean_centered_targets
+  telegram_config_file: telegram_config.yml
+  experiment: esm_surrogate.experiment.AdaptiveWidthExperiment
+  model_selection_criteria:
+    - metric: main_score
+      direction: min
+  evaluate_every: 1
+  risk_assessment_training_runs: 1
+  model_selection_training_runs: 1
+
+grid:
+  model: esm_surrogate.model.AdaptiveESM
+  checkpoint: true
+  shuffle: true
+  batch_size: 2  # stopped after 3 and 6 epochs respectively, to double batch size and move from RMSE to MSE loss
+  epochs: 15
+  # Subtract the centroid computed from the active training fold without scaling.
+  target_normalization: center
+
+  # ESM-2 650M keeps 33 layers, hidden size 1280, and 20 attention heads.
+  # Its adaptive FFNs start at width 256, while query/key start at the native
+  # per-head width of 64 (20 * 64 = 1280 projection outputs).
+  architecture: esm2
+  num_layers:
+    - 16
+    - 8
+  embed_dim: 1280
+  attention_heads: 20
+  token_dropout: true
+  activation:
+    - torch.nn.functional.relu6
+    # - torch.nn.functional.gelu
+  quantile: 0.9
+  # Number of training indices in the configured inner/outer split.
+  n_observations: 132179
+  truncated_distribution:
+    class_name: distribution.TruncatedDistribution
+    args:
+      discretized_distribution:
+        class_name: distribution.DiscretizedDistribution
+        args:
+          base_distribution:
+            class_name: distribution.Exponential
+            args:
+              starting_size: 256
+              max_size: 2048
+
+  # One distribution per block is shared by query and key. Widths are per
+  # attention head; value and output projections remain fixed at embed_dim.
+  attention_truncated_distribution:
+    class_name: distribution.TruncatedDistribution
+    args:
+      discretized_distribution:
+        class_name: distribution.DiscretizedDistribution
+        args:
+          base_distribution:
+            class_name: distribution.Exponential
+            args:
+              starting_size: 256
+              max_size: 1280
+
+  # The global width prior includes both FFN and attention width rates in this
+  # model variant. Keep it disabled unless its mean and scale are recalibrated
+  # for the combined collection of distributions.
+  theta_prior_scale: null # 10.0
+  total_width_prior_mean: null
+  total_width_prior_scale: null
+
+  optimizer:
+    class_name: mlwiz.training.callback.optimizer.Optimizer
+    args:
+      optimizer_class_name: torch.optim.Adam
+      lr:
+        - 0.00001
+
+  scheduler: null
+    # class_name: mlwiz.training.callback.scheduler.MetricScheduler
+    # args:
+    #   scheduler_class_name: torch.optim.lr_scheduler.ReduceLROnPlateau
+    #   use_loss: true
+    #   monitor: validation_main_loss
+    #   mode: min
+    #   patience: 5  # N: tolerated plateau epochs before reducing the LR
+    #   factor: 0.5
+
+  loss: esm_surrogate.metrics.AdaptiveWidthMSELoss
+
+  scorer:
+    class_name: mlwiz.training.callback.metric.MultiScore
+    args:
+      main_scorer: esm_surrogate.metrics.RootMeanSquaredError
+      theta_log_prior: esm_surrogate.metrics.ThetaLogPrior
+      global_width_log_prior: esm_surrogate.metrics.GlobalWidthLogPrior
+      total_parameters: esm_surrogate.metrics.TotalParameters
+
+  engine:
+    class_name: mlwiz.training.engine.TrainingEngine
+    args:
+      engine_callback: esm_surrogate.metrics.TimedEngineCallback
+      skip_final_training_validation_inference: True
+  gradient_clipper: null
+    # class_name: mlwiz.training.callback.gradient_clipping.GradientClipper
+    # args:
+    #   clip_value: 1.0
+  early_stopper:
+    class_name: mlwiz.training.callback.early_stopping.PatienceEarlyStopper
+    args:
+      monitor: validation_main_score
+      mode: min
+      patience: 10
+      checkpoint: true
+  plotter:
+    class_name: esm_surrogate.metrics_dynamic_attention.DynamicAttentionMetricsPlotter
+    args:
+      store_every_N_epochs: 1
+      store_every_N_steps: 100

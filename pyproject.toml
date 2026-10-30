@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esm-surrogate"
+version = "0.1.0"
+description = "Adaptive-width ESM embedding distillation prototype"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fair-esm>=2.0.0",
+    "ipywidgets>=8.1.8",
+    "matplotlib>=3.10.9",
+    "mlwiz==1.7.6",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "torch>=2.5.0",
+    "tqdm>=4.0",
+]
+
+[tool.setuptools]
+packages = ["esm_surrogate"]
+py-modules = ["distribution", "dynamic_optimizers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,6 @@
+{
+  "block": 1024,
+  "plot_sample": 2000,
+  "token_budget": 4096,
+  "raw_esm_dtype": "fp32"
+}

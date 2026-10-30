@@ -1,0 +1,13 @@
+{
+  "epochs": 50,
+  "batch_size": 64,
+  "d_model": 256,
+  "n_layers": 4,
+  "n_heads": 4,
+  "ff_dim": 1024,
+  "lr": 0.0003,
+  "token_budget": 16384,
+  "early_stop_patience": 10,
+  "eval_ar_limit": 0,
+  "decode_batch_size": 16
+}

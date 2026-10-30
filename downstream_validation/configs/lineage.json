@@ -1,0 +1,8 @@
+{
+  "epochs": 200,
+  "batch_size": 4096,
+  "lr": 0.001,
+  "weight_decay": 0.0001,
+  "token_budget": 16384,
+  "class_weighting": true
+}

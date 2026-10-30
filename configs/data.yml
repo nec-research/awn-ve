@@ -1,0 +1,22 @@
+splitter:
+  splits_folder: DATA_SPLITS
+  class_name: esm_surrogate.data.ProteinIDSplitter
+  args:
+    n_outer_folds: 1
+    n_inner_folds: 1
+    seed: 42
+    stratify: false
+    shuffle: true
+    inner_val_ratio: 0.1
+    outer_val_ratio: 0.1
+    test_ratio: 0.1
+
+dataset:
+  class_name: esm_surrogate.data.ProteinEmbeddingDataset
+  args:
+    storage_folder: DATA
+    fasta_path: protein_data/filtered_msa.fasta
+    teacher_embeddings_dir: protein_data/average_token/33
+    teacher_layer: 33
+    max_sequence_length: 1307
+

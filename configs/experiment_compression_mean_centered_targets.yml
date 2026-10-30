@@ -1,0 +1,95 @@
+dataset:
+  storage_folder: DATA
+  dataset_class: esm_surrogate.data.ProteinEmbeddingDataset
+  data_splits_file: DATA_SPLITS/ProteinEmbeddingDataset/ProteinEmbeddingDataset_outer1_inner1.splits
+
+resources:
+  device: cuda
+  max_cpus: 24
+  max_gpus: 2
+  gpus_per_task: 1
+
+reproducibility:
+  seed: 42
+
+data_loading:
+  dataset_getter: mlwiz.data.provider.DataProvider
+  data_loader:
+    class_name: esm_surrogate.data.ESMProteinDataLoader
+    args:
+      max_sequence_length: 1307
+      num_workers: 4
+      pin_memory: true
+
+experiment:
+  result_folder: RESULTS
+  exp_name: esm_distillation_compression_mean_centered_targets
+  telegram_config_file: telegram_config.yml
+  experiment: esm_surrogate.experiment.CompressionAdaptiveWidthExperiment
+  model_selection_criteria:
+    - metric: main_score
+      direction: min
+  evaluate_every: 1
+  risk_assessment_training_runs: 1
+  model_selection_training_runs: 1
+
+grid:
+  # The experiment selects the checkpoint with the lowest validation_main_score
+  # in this result folder and reconstructs its architecture from its manifest.
+  previous_experiment: esm_distillation_mean_centered_targets_ProteinEmbeddingDataset
+  model: esm_surrogate.model.AdaptiveESM
+  checkpoint: true
+  shuffle: true
+  batch_size: 2
+  epochs: 25
+  target_normalization: center
+
+  # This is a ratio of the differentiable total parameter count (adaptive
+  # projections plus constant parameters) to the restored checkpoint count.
+  parameter_compression_target_ratio: 
+    - 0.5
+    - 0.1
+    - 0.3
+  parameter_compression_lambda: 1.0
+
+  optimizer:
+    class_name: mlwiz.training.callback.optimizer.Optimizer
+    args:
+      optimizer_class_name: torch.optim.Adam
+      lr: 0.00001
+
+  scheduler: null
+  loss: esm_surrogate.metrics.FLOPsCompressionAdaptiveWidthMSELoss
+
+  scorer:
+    class_name: mlwiz.training.callback.metric.MultiScore
+    args:
+      main_scorer: esm_surrogate.metrics.RootMeanSquaredError
+      theta_log_prior: esm_surrogate.metrics.ThetaLogPrior
+      global_width_log_prior: esm_surrogate.metrics.GlobalWidthLogPrior
+      total_parameters: esm_surrogate.metrics.TotalParameters
+      soft_total_parameters: esm_surrogate.metrics.SoftTotalParameters
+      parameter_compression_ratio: esm_surrogate.metrics.ParameterCompressionRatio
+      parameter_compression_penalty: esm_surrogate.metrics.ParameterCompressionPenalty
+      soft_flops: esm_surrogate.metrics.SoftFLOPs
+      flops_compression_ratio: esm_surrogate.metrics.FLOPsCompressionRatio
+      flops_compression_penalty: esm_surrogate.metrics.FLOPsCompressionPenalty
+
+  engine:
+    class_name: mlwiz.training.engine.TrainingEngine
+    args:
+      engine_callback: esm_surrogate.metrics.TimedEngineCallback
+      skip_final_training_validation_inference: true
+  gradient_clipper: null
+  early_stopper:
+    class_name: mlwiz.training.callback.early_stopping.PatienceEarlyStopper
+    args:
+      monitor: validation_main_score
+      mode: min
+      patience: 25
+      checkpoint: true
+  plotter:
+    class_name: esm_surrogate.metrics_dynamic_attention.DynamicAttentionMetricsPlotter
+    args:
+      store_every_N_epochs: 1
+      store_every_N_steps: 100

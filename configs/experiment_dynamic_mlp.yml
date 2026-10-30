@@ -1,0 +1,109 @@
+dataset:
+  storage_folder: DATA
+  dataset_class: esm_surrogate.data.ProteinEmbeddingDataset
+  data_splits_file: DATA_SPLITS/ProteinEmbeddingDataset/ProteinEmbeddingDataset_outer1_inner1.splits
+
+resources:
+  device: cuda
+  max_cpus: 24
+  max_gpus: 2
+  gpus_per_task: 1
+
+reproducibility:
+  seed: 42
+
+data_loading:
+  dataset_getter: mlwiz.data.provider.DataProvider
+  data_loader:
+    class_name: esm_surrogate.data.ESMProteinDataLoader
+    args:
+      max_sequence_length: 1307
+      num_workers: 4
+      pin_memory: true
+
+experiment:
+  result_folder: RESULTS
+  exp_name: dynamic_mlp_baseline
+  telegram_config_file: telegram_config.yml
+  # The baseline still uses this experiment wrapper so optimizer state follows
+  # hidden layers when their adaptive widths change.
+  experiment: esm_surrogate.experiment.AdaptiveWidthExperiment
+  model_selection_criteria:
+    - metric: main_score
+      direction: min
+  evaluate_every: 1
+  risk_assessment_training_runs: 1
+  model_selection_training_runs: 1
+
+grid:
+  model: esm_surrogate.baseline.DynamicMLPBaseline
+  checkpoint: true
+  shuffle: true
+  batch_size: 1
+  epochs: 20
+  # Set true to normalize each dimension from the active training fold.
+  normalize_targets: true
+
+  # Depth remains fixed; each of these hidden layers adapts only its width.
+  num_hidden_layers: 
+    - 5
+  # Each aligned token is represented by a learned vector before the sequence
+  # is flattened for the first MLP projection.
+  token_embedding_dim: 256
+  activation: torch.nn.functional.relu6
+  has_bias: true
+  quantile: 0.9
+  truncated_distribution:
+    class_name: distribution.TruncatedDistribution
+    args:
+      discretized_distribution:
+        class_name: distribution.DiscretizedDistribution
+        args:
+          base_distribution:
+            class_name: distribution.Exponential
+            args:
+              starting_size: 256
+              max_size: 2048
+
+  optimizer:
+    class_name: mlwiz.training.callback.optimizer.Optimizer
+    args:
+      optimizer_class_name: torch.optim.Adam
+      lr:
+        - 0.01
+        - 0.00001
+
+  scheduler:
+    class_name: mlwiz.training.callback.scheduler.MetricScheduler
+    args:
+      scheduler_class_name: torch.optim.lr_scheduler.ReduceLROnPlateau
+      use_loss: true
+      monitor: validation_main_loss
+      mode: min
+      patience: 5
+      factor: 0.5
+
+  loss: esm_surrogate.metrics.SmoothL1Loss
+
+  scorer:
+    class_name: mlwiz.training.callback.metric.MultiScore
+    args:
+      main_scorer: esm_surrogate.metrics.SmoothL1Loss
+
+  engine:
+    class_name: mlwiz.training.engine.TrainingEngine
+    args:
+      engine_callback: esm_surrogate.metrics.TimedEngineCallback
+  gradient_clipper: null
+  early_stopper:
+    class_name: mlwiz.training.callback.early_stopping.PatienceEarlyStopper
+    args:
+      monitor: validation_main_score
+      mode: min
+      patience: 10
+      checkpoint: true
+  plotter:
+    class_name: esm_surrogate.metrics.AdaptiveWidthMetricsPlotter
+    args:
+      store_every_N_epochs: 1
+      store_every_N_steps: 100

@@ -1,0 +1,35 @@
+{
+  "esm2": {
+    "type": "esm2",
+    "esm_model": "esm2_t33_650M_UR50D",
+    "esm_dtype": "fp32",
+    "display": "ESM-2 650M",
+    "params_m": 651.0,
+    "ratio": 1.0,
+    "cache_dir": "embeddings/fp32"
+  },
+  "config_1": {
+    "type": "awn",
+    "awn_model": "config_1",
+    "display": "AWN 65.1M",
+    "params_m": 65.1,
+    "ratio": 0.5,
+    "cache_dir": "embeddings/awn_config1"
+  },
+  "config_2": {
+    "type": "awn",
+    "awn_model": "config_2",
+    "display": "AWN 27.6M",
+    "params_m": 27.6,
+    "ratio": 0.1,
+    "cache_dir": "embeddings/awn_config2"
+  },
+  "config_3": {
+    "type": "awn",
+    "awn_model": "config_3",
+    "display": "AWN 39.0M",
+    "params_m": 39.0,
+    "ratio": 0.3,
+    "cache_dir": "embeddings/awn_config3"
+  }
+}
